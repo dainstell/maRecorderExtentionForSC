@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "QA Interaction Recorder",
+  "version": "1.0.0",
+  "description": "Records user interactions and converts them into test case steps.",
+  "permissions": ["storage", "tabs"],
+  "host_permissions": ["<all_urls>"],
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "QA Recorder",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["utils/selectors.js", "content.js"],
+      "run_at": "document_idle",
+      "all_frames": true
+    }
+  ]
+}
