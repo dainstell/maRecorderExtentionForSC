@@ -61,16 +61,53 @@ function buildTuskrCsvRow({ name, suite, section, steps }) {
   };
 }
 
-function stepToCypress(step) {
+function getLocatorExpression(step) {
   const locator = step.locator || {};
+  if (locator.type === 'data-cy') return `cy.get('[data-cy="${escapeForSingleQuotes(locator.value)}"]')`;
+  if (locator.type === 'id') return `cy.get('#${escapeForSingleQuotes(locator.value)}')`;
+  if (locator.type === 'css') return `cy.get('${escapeForSingleQuotes(locator.value)}')`;
+  if (locator.type === 'xpath') return `cy.xpath('${escapeForSingleQuotes(locator.value)}')`;
+  if (step.cssSelector) return `cy.get('${escapeForSingleQuotes(step.cssSelector)}')`;
+  return `cy.get('body')`;
+}
 
-  let by = '';
-  if (locator.type === 'data-cy') by = `cy.get('[data-cy="${escapeForSingleQuotes(locator.value)}"]')`;
-  else if (locator.type === 'id') by = `cy.get('#${escapeForSingleQuotes(locator.value)}')`;
-  else if (locator.type === 'css') by = `cy.get('${escapeForSingleQuotes(locator.value)}')`;
-  else if (locator.type === 'xpath') by = `cy.xpath('${escapeForSingleQuotes(locator.value)}')`;
-  else if (step.cssSelector) by = `cy.get('${escapeForSingleQuotes(step.cssSelector)}')`;
-  else by = `cy.get('body')`;
+function expectedToAssertions(step) {
+  const expected = (step.expected || '').trim();
+  if (!expected) return [];
+  const assertions = [];
+  const parts = expected.split(/\.\s+/);
+
+  for (const part of parts) {
+    const p = part.trim().replace(/\.+$/, '');
+    if (!p) continue;
+
+    const navMatch = p.match(/^Should navigate to (.+)$/i);
+    if (navMatch) { assertions.push(`cy.url().should('include', '${escapeForSingleQuotes(navMatch[1].trim())}')`); continue; }
+
+    if (/dialog should appear/i.test(p)) { assertions.push(`cy.get('[role="dialog"]').should('be.visible')`); continue; }
+    if (/dialog should close/i.test(p)) { assertions.push(`cy.get('[role="dialog"]').should('not.exist')`); continue; }
+    if (/dropdown.*should open|menu should open/i.test(p)) { assertions.push(`cy.get('[role="menu"]').should('be.visible')`); continue; }
+    if (/dropdown.*should close|menu should close/i.test(p)) { assertions.push(`cy.get('[role="menu"]').should('not.exist')`); continue; }
+    if (/tooltip should appear/i.test(p)) { assertions.push(`cy.get('[role="tooltip"]').should('be.visible')`); continue; }
+
+    const toastMatch = p.match(/message should appear:\s*"(.+)"/i);
+    if (toastMatch) { assertions.push(`cy.contains('${escapeForSingleQuotes(toastMatch[1])}').should('be.visible')`); continue; }
+
+    if (/should contain the entered value/i.test(p) && step.value) {
+      assertions.push(`${getLocatorExpression(step)}.should('have.value', '${escapeForSingleQuotes(step.value)}')`);
+      continue;
+    }
+
+    const setToMatch = p.match(/should be set to (.+)$/i);
+    if (setToMatch) { assertions.push(`${getLocatorExpression(step)}.should('have.value', '${escapeForSingleQuotes(setToMatch[1])}')`); continue; }
+
+    assertions.push(`// Expected: ${p}`);
+  }
+  return assertions;
+}
+
+function stepToCypress(step) {
+  const by = getLocatorExpression(step);
 
   if (step.action === 'click') return `${by}.click()`;
 
@@ -269,6 +306,8 @@ document.getElementById('exportCypress').addEventListener('click', async () => {
       lines.push(`    cy.visit('${escapeForSingleQuotes(lastUrl)}')`);
     }
     lines.push(`    ${stepToCypress(s)}`);
+    const assertions = expectedToAssertions(s);
+    for (const a of assertions) lines.push(`    ${a}`);
   }
 
   lines.push('  })');
@@ -286,7 +325,10 @@ document.getElementById('exportCsv').addEventListener('click', async () => {
   const name = window.prompt('Tuskr Test Case Name:', suggestedName);
   if (name === null) return;
 
-  const { header, row } = buildTuskrCsvRow({ name: String(name).trim() || suggestedName, suite: 'e2e', section: '', steps });
+  const section = window.prompt('Tuskr Section name:', '');
+  if (section === null) return;
+
+  const { header, row } = buildTuskrCsvRow({ name: String(name).trim() || suggestedName, suite: 'e2e', section: (section || '').trim(), steps });
   const csv = [header, row].join('\n');
   showExport(csv);
   downloadTextFile(`${sanitizeFilename(String(name).trim() || suggestedName)}.csv`, csv, 'text/csv');

@@ -51,7 +51,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     if (message.type === 'QA_START_RECORDING') {
-      await setSteps([]);
       await setRecording(true);
       sendResponse({ ok: true });
       return;
@@ -87,6 +86,18 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     if (message.type === 'QA_GET_TESTCASES') {
       const items = await getTestcases();
+      sendResponse({ ok: true, testcases: items });
+      return;
+    }
+
+    if (message.type === 'QA_UPDATE_TESTCASE') {
+      const { id, patch } = message.payload || {};
+      const items = await getTestcases();
+      const idx = items.findIndex((t) => t.id === id);
+      if (idx >= 0 && patch && typeof patch === 'object') {
+        items[idx] = { ...items[idx], ...patch };
+        await setTestcases(items);
+      }
       sendResponse({ ok: true, testcases: items });
       return;
     }
