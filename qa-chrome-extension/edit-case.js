@@ -84,10 +84,17 @@ function renderSteps() {
          </div>`
       : '';
 
+    const isFirst = idx === 0;
+    const isLast = idx === steps.length - 1;
+
     card.innerHTML = `
       <div class="step-header">
         <span class="step-num">#${idx + 1}</span>
-        <button class="danger step-remove" data-index="${idx}">Remove</button>
+        <div class="step-btn-group">
+          <button class="btn-move step-up" data-index="${idx}" ${isFirst ? 'disabled' : ''} title="Move up">&#9650;</button>
+          <button class="btn-move step-down" data-index="${idx}" ${isLast ? 'disabled' : ''} title="Move down">&#9660;</button>
+          <button class="danger step-remove" data-index="${idx}">Remove</button>
+        </div>
       </div>
       <div class="step-field">
         <label>Step Description</label>
@@ -111,6 +118,26 @@ function renderSteps() {
     btn.addEventListener('click', () => {
       const idx = parseInt(btn.dataset.index);
       currentCase.steps.splice(idx, 1);
+      renderSteps();
+    });
+  });
+
+  list.querySelectorAll('.step-up').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.index);
+      if (idx <= 0) return;
+      const steps = currentCase.steps;
+      [steps[idx - 1], steps[idx]] = [steps[idx], steps[idx - 1]];
+      renderSteps();
+    });
+  });
+
+  list.querySelectorAll('.step-down').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const idx = parseInt(btn.dataset.index);
+      const steps = currentCase.steps;
+      if (idx >= steps.length - 1) return;
+      [steps[idx], steps[idx + 1]] = [steps[idx + 1], steps[idx]];
       renderSteps();
     });
   });
@@ -176,6 +203,32 @@ document.getElementById('save').addEventListener('click', saveCase);
 
 document.getElementById('back').addEventListener('click', () => {
   window.close();
+});
+
+document.getElementById('addStep').addEventListener('click', () => {
+  if (!currentCase) return;
+  if (!currentCase.steps) currentCase.steps = [];
+  currentCase.steps.push({
+    action: 'click',
+    readable: '',
+    tagName: '',
+    innerText: '',
+    dataCy: '',
+    id: '',
+    cssSelector: '',
+    xpath: '',
+    locator: { type: '', value: '' },
+    value: '',
+    expected: '',
+    pageUrl: ''
+  });
+  renderSteps();
+  // Scroll to the new step
+  setTimeout(() => {
+    const list = document.getElementById('stepsList');
+    const last = list.lastElementChild;
+    if (last) last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, 50);
 });
 
 document.getElementById('addTag').addEventListener('click', () => {
