@@ -482,13 +482,29 @@ function getInputTargetFromEvent(e) {
   return closest || e.target;
 }
 
+const TOP_LEVEL_IDS = new Set(['app', 'root', '__nuxt', '__next', 'q-app', 'main-content', 'wrapper']);
+
+function isTopLevelContainer(el) {
+  if (!el || el.nodeType !== 1) return false;
+  const tag = (el.tagName || '').toLowerCase();
+  if (tag === 'body' || tag === 'html') return true;
+  const id = (el.getAttribute('id') || '').toLowerCase();
+  if (TOP_LEVEL_IDS.has(id)) return true;
+  // Very large elements covering most of the viewport are likely containers
+  const rect = el.getBoundingClientRect();
+  if (rect.width >= window.innerWidth * 0.9 && rect.height >= window.innerHeight * 0.8) return true;
+  return false;
+}
+
 function isMeaningfulClickTarget(el) {
   if (!el || el.nodeType !== 1) return false;
+  if (isTopLevelContainer(el)) return false;
+
   const tag = String(el.tagName || '').toLowerCase();
   if (tag === 'button' || tag === 'a') return true;
 
   const role = String(el.getAttribute('role') || '').toLowerCase();
-  if (role === 'button' || role === 'link') return true;
+  if (role === 'button' || role === 'link' || role === 'menuitem' || role === 'option' || role === 'tab') return true;
 
   if (window.QASelectors.getDataCy(el)) return true;
   if (window.QASelectors.getId(el)) return true;
@@ -496,6 +512,16 @@ function isMeaningfulClickTarget(el) {
   if (typeof el.onclick === 'function') return true;
   const tabIndex = el.getAttribute('tabindex');
   if (tabIndex !== null && tabIndex !== '-1') return true;
+
+  // Recognize elements with 'clickable' or 'selectable' CSS class
+  const cls = (el.className && typeof el.className === 'string') ? el.className.toLowerCase() : '';
+  if (/\b(clickable|selectable|btn|toggle|switch)\b/.test(cls)) return true;
+
+  // Check cursor:pointer as a hint of interactivity
+  try {
+    const style = window.getComputedStyle(el);
+    if (style.cursor === 'pointer') return true;
+  } catch { /* skip */ }
 
   return false;
 }
@@ -547,8 +573,39 @@ function findAncestorLabel(el, maxHops) {
   return '';
 }
 
+function stripTrailingStats(text) {
+  if (!text) return text;
+  // Remove trailing numeric tokens: "22.6K", "1,200", "5.2K", "100%", "3/10", "$500" etc.
+  return text.replace(/[\s]+[\d$€£¥#][\d,.\s]*[KkMmBb%]?(\s*\/\s*\d+)?$/g, '').trim();
+}
+
+function getCompactText(el) {
+  if (!el || el.nodeType !== 1) return '';
+  let fullText = cleanVisibleText(window.QASelectors.getElementText(el));
+  fullText = stripTrailingStats(fullText);
+  // Short enough — use directly
+  if (fullText && fullText.length <= 50) return fullText;
+
+  // Text too long — try to find a shorter, more meaningful child text
+  const candidates = el.querySelectorAll('.title, .label, .name, .text, h1, h2, h3, h4, h5, h6, span, strong, b, em');
+  for (const child of candidates) {
+    const ct = cleanVisibleText((child.innerText || child.textContent || '').trim());
+    if (ct && !isTrivialText(ct) && ct.length >= 3 && ct.length <= 60) return ct;
+  }
+
+  // Try direct children text nodes
+  for (const child of el.children) {
+    const ct = cleanVisibleText((child.innerText || child.textContent || '').trim());
+    if (ct && !isTrivialText(ct) && ct.length >= 3 && ct.length <= 50) return ct;
+  }
+
+  // Truncate full text as last resort
+  if (fullText && fullText.length > 50) return fullText.slice(0, 50).trim();
+  return fullText || '';
+}
+
 function getLabelForElement(el) {
-  const text = cleanVisibleText(window.QASelectors.getElementText(el));
+  const text = getCompactText(el);
   const aria = cleanVisibleText((el.getAttribute('aria-label') || '').trim());
   const title = cleanVisibleText((el.getAttribute('title') || '').trim());
   const placeholder = cleanVisibleText((el.getAttribute('placeholder') || '').trim());

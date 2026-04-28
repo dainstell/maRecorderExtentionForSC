@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QA Interaction Recorder",
-  "version": "1.0.0",
+  "version": "4.0.0",
   "description": "Records user interactions and converts them into test case steps.",
   "permissions": ["storage", "tabs"],
   "host_permissions": ["<all_urls>"],
